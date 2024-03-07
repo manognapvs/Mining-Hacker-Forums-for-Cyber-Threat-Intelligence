@@ -1,0 +1,214 @@
+# Data Analysis
+df.head(5)
+
+# df.head(3)
+# type(df["txtBody_NoQuote_Clean"])
+len(df.txtBody_NoQuote_Clean[100000:])
+import dask.array as da
+from ioc_finder import find_iocs
+
+result = df.txtBody_NoQuote_Clean.map_partitions(find_iocs, meta=dict)
+
+df.map_partitions(len).compute()
+from ioc_finder import find_iocs
+
+def myIocExtractor(row, axis, result_type):
+    return pd.Series(find_iocs(str(row), included_ioc_types=[
+        # "asns",
+        # "authentihashes",
+        # "bitcoin_addresses",
+        # "cves",
+        "domains",
+        # "email_addresses",
+        "email_addresses_complete",
+        # "file_paths",
+        # "google_adsense_publisher_ids",
+        # "google_analytics_tracker_ids",
+        # "imphashes",
+        "ipv4_cidrs",
+        "ipv4s",
+        "ipv6s",
+        "mac_addresses",
+        # "md5s",
+        # "monero_addresses",
+        # "registry_key_paths",
+        # "sha1s",
+        # "sha256s",
+        # "sha512s",
+        # "ssdeeps",
+        # "tlp_labels",
+        "urls"
+        # "user_agents",
+        # "xmpp_addresses"
+      ]))
+    
+# print(pd.Series(find_iocs(str(df.txtBody_NoQuote_Clean[:1]), included_ioc_types=[
+#         # "asns",
+#         # "authentihashes",
+#         # "bitcoin_addresses",
+#         # "cves",
+#         "domains",
+#         # "email_addresses",
+#         "email_addresses_complete",
+#         # "file_paths",
+#         # "google_adsense_publisher_ids",
+#         # "google_analytics_tracker_ids",
+#         # "imphashes",
+#         "ipv4_cidrs",
+#         "ipv4s",
+#         "ipv6s",
+#         "mac_addresses",
+#         # "md5s",
+#         # "monero_addresses",
+#         # "registry_key_paths",
+#         # "sha1s",
+#         # "sha256s",
+#         # "sha512s",
+#         # "ssdeeps",
+#         # "tlp_labels",
+#         "urls"
+#         # "user_agents",
+#         # "xmpp_addresses"
+#       ])))
+res = df.txtBody_NoQuote_Clean.apply(myIocExtractor, axis=1, result_type='expand', meta={'urls': 'object',
+                                                                                         'email_addresses_complete': 'object',
+                                                                                         'ipv4_cidrs': 'object',
+                                                                                         'domains': 'object',
+                                                                                         'ipv4s': 'object',
+                                                                                         'ipv6s': 'object',
+                                                                                         'mac_addresses': 'object'})
+full = df.merge(res)
+output=full.compute()
+output.to_csv("../dataset/output-10000-ioc_extractor.csv")
+output
+output.to_csv("../dataset/output-10000-ioc_extractor-2.csv")
+# Download the Stanford CoreNLP package with Stanza's installation command
+# This'll take several minutes, depending on the network speed
+corenlp_dir = './corenlp'
+stanza.install_corenlp(dir=corenlp_dir)
+
+# Set the CORENLP_HOME environment variable to point to the installation location
+import os
+os.environ["CORENLP_HOME"] = corenlp_dir
+# Import client module
+from stanza.server import CoreNLPClient
+# Shut down the background CoreNLP server
+client.stop()
+
+time.sleep(10)
+!ps -o pid,cmd | grep java
+import re
+import nltk
+from nltk.corpus import stopwords
+import spacy
+
+spacy.cli.download("en_core_web_sm")
+
+nltk.download('stopwords')
+nltk.download('punkt')
+
+def remove_newlinechars(text):
+    '''
+    Substitute any newline chars with a whitespach
+    
+    The `regex` can be tried at: https://regex101.com/r/2fImPz/1/
+    '''
+    regex = r'\s+'
+    return re.sub(regex, ' ', text)
+
+def tokenize(text):
+    '''
+    Tokenize text
+    '''
+    tokens = nltk.word_tokenize(text)
+    
+    return list(
+        filter(lambda word: word.isalnum(), tokens)
+    )
+
+stop_words = stopwords.words("english")## Add some common words from text
+stop_words.extend(["from","subject","summary","keywords","article"])
+def remove_stopwords(words):
+    '''
+    Remove stop words from the list of words
+    '''
+    
+    filtered = filter(lambda word: word not in stop_words, words)
+    
+    return list(filtered)
+
+nlp = spacy.load("en_core_web_sm")
+
+allowed_tags = ["NOUN", "VERB"]
+
+def lemmatize(text, nlp=nlp):
+    
+    doc = nlp(" ".join(text))
+    
+    lemmatized = [token.lemma_ for token in doc if token.pos_ in allowed_tags]
+    
+    return lemmatized
+
+def clean_text(df):
+    '''
+    Take in a Dataframe, and process it
+    '''
+    df["cleaned_text"] = df.txtBody_NoQuote_Clean.map(lambda text:str(text).lower()).map(remove_newlinechars).map(tokenize).map(remove_stopwords).map(lemmatize)
+
+dask_dataframe = dd.read_csv('../dataset/10.csv_Part0.txt', sep='\t', usecols=[42])
+
+dask_dataframe.head(5)
+
+import numpy as np
+
+# meta = dd.DataFrame(meta=['cleaned_text'])
+# meta.a = meta.a.astype(np.int64)
+dask_dataframe = dask_dataframe.assign(cleaned_text=lambda x: "")
+dask_dataframe
+result = dask_dataframe.map_partitions(clean_text, meta=dask_dataframe)
+df = result.compute()
+df.to_csv("../dataset/10.csv_Part0-lemmatized-3.csv")
+df.head(3)
+import pandas as pd
+ioc_extracted_data = pd.read_csv("../dataset/output-10000-ioc_extractor.csv")
+ioc_extracted_data.head(5)
+def count_iocs(row):
+  count = []
+  for i in row.to_list():
+    i = i.replace("[", "")
+    i = i.replace("]", "")
+    if i != '':
+      i = i.split(",")
+    count.append(i)
+  return count
+iocs_grouped_by_authors = ioc_extracted_data.groupby('txtAuthor')['urls'].apply(count_iocs)
+iocs_grouped_by_authors.head(5)
+iocs_grouped_by_authors
+iocs_grouped_by_authors['urls'].head(5)
+iocs_grouped_by_authors = pd.DataFrame({'urls' : ioc_extracted_data.groupby('txtAuthor')['urls'].apply(count_iocs)}).reset_index()
+iocs_grouped_by_authors.head(5)
+iocs_grouped_by_authors.head(5)
+
+iocs_grouped_by_authors['urls']
+
+
+
+
+hacker_and_iocs = iocs_grouped_by_authors[iocs_grouped_by_authors['txtAuthor'].isin(["dvsocks", "mata00", "rai10", "viruslover", "dichvusocks"])]
+hacker_and_iocs.head(5)
+IOC_dict = {
+    'urls':[]
+}
+def remove_empty_values(row, ioc_name):
+    for i in row:
+        if i != '':
+            for k in range(len(i)):
+                i[k] = i[k].replace("'", "")
+                i[k] = i[k].replace(" ", "")
+            IOC_dict[ioc_name].extend(i)
+    return
+hacker_and_iocs['urls'].apply((lambda x: remove_empty_values(x, 'urls')))
+print(IOC_dict)
+
+
+
